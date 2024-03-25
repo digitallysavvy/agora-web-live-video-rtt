@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/agora-box-logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agora Live Video Demo</title>
+  </head>
+  <body>
+    <div id="container">
+      <div id="local-media-controls">
+        <!-- TODO: Add Buttons to control toggle mic/video, and screenshare -->
+      </div>
+      <div id="device-controls">
+        <button id="mic-toggle">Mic</button>
+        <button id="viceo-toggle">Video</button>
+      </div>
+      <div id="full-screen-video"></div>
+      <div id="lower-video-container">
+        <div id="remote-video-container"></div>
+        <div id="local-video-container">
+          <div id="mute-mic-icon"></div>
+          <div id="mute-video-overlay"></div>
+          <div id="local-video"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modalForm">
+
+    </div>
+    <script type="module" src="/agora-live-video.js"></script>
+  </body>
+</html>
