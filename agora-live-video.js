@@ -1,7 +1,6 @@
 import './style.css'
 import agoraLogo from './agora-logo.svg'
 import AgoraRTC, { IAgoraRTC } from 'agora-rtc-sdk-ng'
-import AddAgoraEventListeners from './agora-event-listeners.js'
 
 
 const appid = import.meta.env.VITE_AGORA_APP_ID
