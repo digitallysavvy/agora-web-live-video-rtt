@@ -67,9 +67,13 @@ async function initDevices() {
   localTracks.camera.video.play('local-video')    // Play the local video track in the local-video div
 }
 
-async function joinChannel(channelName){
-
-  return 
+// Add client Event Listeners -- called on page load
+const addAgoraEventListeners = () => {
+  // Add listeners for Agora Client Events
+  client.on('user-joined', handleRemotUserJoined)
+  client.on('user-left', handleRemotUserLeft)
+  client.on('user-published', handleRemotUserPublished)
+  client.on('user-unpublished', handleRemotUserUnpublished)
 }
 
 // when the user submits the join form
@@ -80,17 +84,9 @@ joinform.addEventListener('submit', async function(e){
     return
   }
 
-  toggleModalDisplay()
+  showOverlayForm(false)              // Hide overlay form
   
-  // TODO: hide overlay with inputs
   await initDevices()               // Initialize the devices and create Tracks
-  
-  // Add listeners for Agora Client Events
-  client.on('user-joined', handleRemotUserJoined)
-  client.on('user-left', handleRemotUserLeft)
-  client.on('user-published', handleRemotUserPublished)
-  client.on('user-unpublished', handleRemotUserUnpublished)
-
 
   // Join the channel and publish out streams
   const token = null                              // Token security is not enabled
@@ -122,14 +118,14 @@ const handleRemotUserPublished = async (user, mediaType) => {
   remoteUsers[uid] = user                             // update remote user reference
   if (mediaType === 'video') { 
     user.videoTrack.play(`remote-user-${uid}-video`) 
-    // if (mainIsEmpty) {
-    //   mainStreamUid = uid
-    //   user.videoTrack.play('full-screen-video') // play video on main user div
-    //   // await removeRemoteUserDiv(uid)
-    // } else {
-    //    // play video on remote user div
-    //    user.videoTrack.play(`remote-user-${uid}-video`) 
-    // }           
+    if (mainIsEmpty()) {
+      mainStreamUid = uid
+      user.videoTrack.play('full-screen-video') // play video on main user div
+      await removeRemoteUserDiv(uid)
+    } else {
+       // play video on remote user div
+       user.videoTrack.play(`remote-user-${uid}-video`) 
+    }           
   } else if (mediaType === 'audio') {
     user.audioTrack.play()
   }
@@ -142,9 +138,12 @@ const handleRemotUserUnpublished = async (user, mediaType) => {
   if (mediaType === 'video') {
     // Check if its the full screen user
     if (uid === mainStreamUid) {
-      if(Object.keys(remoteUsers).length > 1) {
+      if(Object.keys(remoteUsers).length > 0) {
         // Find a user and switch them to the full-screen
-        const randomUid = getRandomRemoteUserUid()
+        let randomUid = getRandomRemoteUserUid()
+        while (randomUid == mainStreamUid) {
+          randomUid = getRandomRemoteUserUid()
+        }
         await setNewMainVideo(randomUid)
       } else{
         getById('full-screen-video').replaceChildren() // Remove all children of the main div
@@ -174,11 +173,12 @@ const createRemoteUserDiv = async (uid) => {
   getById('remote-video-container').appendChild(containerDiv)
 
   // Double click to swap container with main div
-  // containerDiv.addEventListener('dblclick', async (e) => {
-  //   await setNewMainVideo(uid)
-  // })
+  containerDiv.addEventListener('dblclick', async (e) => {
+    await swapMainVideo(uid)
+  })
 }
 
+// Remove the div when users leave the channel
 const removeRemoteUserDiv = async (uid) => {
   const containerDiv = getById(`remote-user-${uid}-container`)
   if (containerDiv) {
@@ -186,42 +186,54 @@ const removeRemoteUserDiv = async (uid) => {
   }
 }
 
+// check if the main-screen is empty
 const mainIsEmpty = () => {
   return getById('full-screen-video').childNodes.length === 0
 }
 
 const setNewMainVideo = async (newMainUid) => {
   getById('full-screen-video').replaceChildren()  // clear the main div
-  await createRemoteUserDiv(mainStreamUid)
-  remoteUsers[mainStreamUid].videoTrack.play(`remote-user-${mainStreamUid}-video`)
   await removeRemoteUserDiv(newMainUid)
+  console.log(`newMainUid: ${newMainUid}`)
   remoteUsers[newMainUid].videoTrack.play('full-screen-video')
   mainStreamUid = newMainUid
+}
+
+const swapMainVideo = async (newMainUid) => {
+  getById('full-screen-video').replaceChildren()  // clear the main div
+  if(remoteUsers[mainStreamUid]) {
+    await createRemoteUserDiv(mainStreamUid)
+    remoteUsers[mainStreamUid].videoTrack.play(`remote-user-${mainStreamUid}-video`)
+  }
+  await setNewMainVideo(newMainUid)
 }
 
 const getRandomRemoteUserUid = () => {
   const allUids = Object.keys(remoteUsers)
   if (allUids.length === 0) return undefined   // TODO: handle error-case
   // return a random uid
-  return allUids[Math.floor(Math.random() * allUids.length)]
+  const randomUid = allUids[Math.floor(Math.random() * allUids.length)]
+  console.log(`randomUid: ${randomUid}`)
+  return randomUid
 }
 
-const toggleModalDisplay = () => {
+const showOverlayForm = (show) => {
   console.log('toggle-overlay')
   const modal = getById('overlay')
-  if (modal.classList.contains('show')) {
-    modal.classList.remove('show')
-  } else {
+  if (show) {
     modal.style.display = 'block'
     requestAnimationFrame(() => {
       modal.classList.add('show')
     })
+  } else {
+    modal.classList.remove('show')
   }
 }
 
 // Listen for page loaded event
 document.addEventListener('DOMContentLoaded', () => {
   console.log('page-loaded')
-  toggleModalDisplay()
+  showOverlayForm(true)
+  addAgoraEventListeners();
 })
 
