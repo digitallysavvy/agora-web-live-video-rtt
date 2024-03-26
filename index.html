@@ -8,26 +8,37 @@
   </head>
   <body>
     <div id="container">
-      <div id="local-media-controls">
-        <!-- TODO: Add Buttons to control toggle mic/video, and screenshare -->
+      <div id="full-screen-video"></div>
+      <div id="remote-video-container"></div>
+      <div id="local-video-container">
+        <div id="mute-mic-icon"></div>
+        <div id="mute-video-overlay"></div>
+        <div id="local-video"></div>
       </div>
-      <div id="device-controls">
+      <div id="local-media-controls">
         <button id="mic-toggle">Mic</button>
         <button id="viceo-toggle">Video</button>
       </div>
-      <div id="full-screen-video"></div>
-      <div id="lower-video-container">
-        <div id="remote-video-container"></div>
-        <div id="local-video-container">
-          <div id="mute-mic-icon"></div>
-          <div id="mute-video-overlay"></div>
-          <div id="local-video"></div>
-        </div>
-      </div>
     </div>
-
-    <div id="modalForm">
-
+    <div id="overlay" class="modal">
+      <div id="modal-container">
+        <div id="modal-header">
+          <div id="title">
+            <h1>Join Channel</h1>
+          </div>
+        </div>
+        <form id="join-channel-form">
+          <div id="modal-body">
+            <div class="form-group">
+              <label for="form-channel-name">Channel Name</label>
+              <input type="text" id="form-channel-name" class="form-control">
+            </div>
+            <div id="modal-footer">
+              <button type="submit" id="join-channel-btn">Join Channel</button>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
     <script type="module" src="/agora-live-video.js"></script>
   </body>

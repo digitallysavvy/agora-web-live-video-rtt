@@ -1,5 +1,5 @@
 import './style.css'
-import agoraLogo from './agora-logo.svg'
+// import agoraLogo from '/agora-logo.svg'
 import AgoraRTC, { IAgoraRTC } from 'agora-rtc-sdk-ng'
 
 
@@ -8,8 +8,7 @@ const cameraVideoPreset = '360p_7'          // 480 x 360p - 15fps @ 320 Kps
 const audioConfigPreset = 'music_standard'  // 48kHz mono @ 40 Kbps
 const screenShareVideoPreset = '1080_3'     // 1920 x 1080 - 30fps @ 3150 Kps
 
-const joinform = getById('joinForm')
-// const joinChannelBtn = getById('joinBtn')
+const joinform = getById('join-channel-form')
 const leaveChannelBtn = getById('leaveBtn')
 const micToggleBtn = getById('mic-toggle')
 const videoToggleBtn = getById('video-toggle')
@@ -68,17 +67,21 @@ async function initDevices() {
   localTracks.camera.video.play('local-video')    // Play the local video track in the local-video div
 }
 
-async function joinChannel(client, channelName){
-  const token = null                // Token security is not enabled
-  const uid = null                  // Pass null to have Agora set UID dynamically
-  client.join(appid, channelName, token, uid)
+async function joinChannel(channelName){
+
+  return 
 }
 
 // when the user submits the join form
-joinform.onsubmit(async function(e){
+joinform.addEventListener('submit', async function(e){
   e.preventDefault()
+  const channelName = getById('form-channel-name').value.trim()
+  if (!channelName || channelName === '') {
+    return
+  }
 
-  const channelName = getById('channelName')
+  toggleModalDisplay()
+  
   // TODO: hide overlay with inputs
   await initDevices()               // Initialize the devices and create Tracks
   
@@ -87,8 +90,12 @@ joinform.onsubmit(async function(e){
   client.on('user-left', handleRemotUserLeft)
   client.on('user-published', handleRemotUserPublished)
   client.on('user-unpublished', handleRemotUserUnpublished)
-  
-  await joinChannel(client, channelName)
+
+
+  // Join the channel and publish out streams
+  const token = null                              // Token security is not enabled
+  const uid = null                                // Pass null to have Agora set UID dynamically
+  await client.join(appid, channelName, token, uid)
   await client.publish([localTracks.camera.audio, localTracks.camera.video])
 })
 
@@ -114,13 +121,15 @@ const handleRemotUserPublished = async (user, mediaType) => {
   await client.subscribe(user, mediaType)
   remoteUsers[uid] = user                             // update remote user reference
   if (mediaType === 'video') { 
-    if (mainIsEmpty) {
-      mainStreamUid = uid
-      user.videoTrack.play('full-screen-video') // play video on main user div
-      await removeRemoteUserDiv(uid)
-    } else {
-      user.videoTrack.play(`remote-user-${uid}-video`)  // play video on remote user div
-    }           
+    user.videoTrack.play(`remote-user-${uid}-video`) 
+    // if (mainIsEmpty) {
+    //   mainStreamUid = uid
+    //   user.videoTrack.play('full-screen-video') // play video on main user div
+    //   // await removeRemoteUserDiv(uid)
+    // } else {
+    //    // play video on remote user div
+    //    user.videoTrack.play(`remote-user-${uid}-video`) 
+    // }           
   } else if (mediaType === 'audio') {
     user.audioTrack.play()
   }
@@ -154,18 +163,20 @@ const handleRemotUserUnpublished = async (user, mediaType) => {
 
 // create the remote user container and video player div
 const createRemoteUserDiv = async (uid) => {
+  console.log('add remote user div')
   const containerDiv = document.createElement('div')
   containerDiv.id = `remote-user-${uid}-container`
   const remoteUserDiv = document.createElement('div')
   remoteUserDiv.id = `remote-user-${uid}-video`
+  remoteUserDiv.classList.add('remote-video')
   containerDiv.appendChild(remoteUserDiv)
   // Add remote user to remote video container
-  getById('remote-video-container"').appendChild(containerDiv)
+  getById('remote-video-container').appendChild(containerDiv)
 
   // Double click to swap container with main div
-  containerDiv.addEventListener('dblclick', async (e) => {
-    await setNewMainVideo(uid)
-  })
+  // containerDiv.addEventListener('dblclick', async (e) => {
+  //   await setNewMainVideo(uid)
+  // })
 }
 
 const removeRemoteUserDiv = async (uid) => {
@@ -194,3 +205,23 @@ const getRandomRemoteUserUid = () => {
   // return a random uid
   return allUids[Math.floor(Math.random() * allUids.length)]
 }
+
+const toggleModalDisplay = () => {
+  console.log('toggle-overlay')
+  const modal = getById('overlay')
+  if (modal.classList.contains('show')) {
+    modal.classList.remove('show')
+  } else {
+    modal.style.display = 'block'
+    requestAnimationFrame(() => {
+      modal.classList.add('show')
+    })
+  }
+}
+
+// Listen for page loaded event
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('page-loaded')
+  toggleModalDisplay()
+})
+
