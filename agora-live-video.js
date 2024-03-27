@@ -46,10 +46,19 @@ const localDevives = {
 
 let screenshareClient               // Create Screen Share client as needed
 let isScreenShareActive = false     // Screen Share flag
-let remoteUsers = {}           // Container for the remote streams
-let mainStreamUid = null                      // Reference for video in the full screen view
+let remoteUsers = {}                // Container for the remote streams
+let mainStreamUid = null            // Reference for video in the full screen view
 
-AgoraRTC.enableLogUpload()          // Auto upload logs to Agora
+const Loglevel = {
+  DEBUG: 0,
+  INFO: 1,
+  WARNING: 2,
+  ERROR: 3,
+  NONE: 4
+}
+
+AgoraRTC.enableLogUpload()                       // Auto upload logs to Agora
+AgoraRTC.setLogLevel(Loglevel.DEBUG)             // Set Loglevel
 
 // TODO: Add support for audience and url-params
 
@@ -77,9 +86,9 @@ joinform.addEventListener('submit', async function(e){
     // TODO: Add error message
     return
   }
-  showOverlayForm(false)              // Hide overlay form
-  await initDevices()               // Initialize the devices and create Tracks
-  getById('local-media-controls').style.display = 'block' // show media controls (mic, video. screen-share, etc)
+  showOverlayForm(false)                                    // Hide overlay form
+  await initDevices()                                       // Initialize the devices and create Tracks
+  getById('local-media-controls').style.display = 'block'   // show media controls (mic, video. screen-share, etc)
 
   // Join the channel and publish out streams
   const token = null                                // Token security is not enabled
@@ -197,17 +206,12 @@ const handleVideoToggle = async (event) => {
   localTrackState.video = !isTrackActive                                    // Invert the video state
 }
 
+// Single function to mute audio/video tracks, using their common API
 const muteTrack = async (track, mute, btn) => {
   if (!track) return                      // Make sure the track exists
   await track.setMuted(mute)              // Mute the Track (Audio or Video)
-  
-  if (mute){
-    btn.classList.remove('media-active')  // remove the active state
-    btn.classList.add('muted')            // show the button as muted
-  } else {
-    btn.classList.remove('muted')         // remove the muted class
-    btn.classList.add('media-active')     // show the button as active
-  }
+  btn.classList.toggle('media-active')    // Add/Remove active class
+  btn.classList.toggle('muted')           // Add/Remove muted class
 }
 
 const handleScreenShare = () => {
@@ -228,18 +232,14 @@ const handleLeaveChannel = async () => {
       localTracks.camera[trackName] = undefined
     }
   }
-
-  getById('local-media-controls').style.display = 'none' // show media controls (mic, video. screen-share, etc)
-
-  // remove remote users and player views
-  remoteUsers = {}
-  getById('remote-video-container').replaceChildren()   // Clear the remote user divs
-  getById('full-screen-video').replaceChildren()        // Clear the main div
-  
-  // leave the channel
-  await client.leave()
+  await client.leave()                                    // Leave the channel
   console.log("client left channel successfully")  
-  showOverlayForm(true) 
+  // Reset the UI
+  remoteUsers = {}                                        // Reset remote users 
+  getById('remote-video-container').replaceChildren()     // Clear the remote user divs
+  getById('full-screen-video').replaceChildren()          // Clear the main div
+  getById('local-media-controls').style.display = 'none'  // show media controls (mic, video. screen-share, etc)
+  showOverlayForm(true)                                   // Show the Join Form overlay
 }
 
 // create the remote user container and video player div
@@ -275,6 +275,7 @@ const mainIsEmpty = () => {
 
 const setNewMainVideo = async (newMainUid) => {
   getById('full-screen-video').replaceChildren()  // clear the main div
+  if (!newMainUid) return                         // Exit early if newMainUid is undefined
   await removeRemoteUserDiv(newMainUid)
   console.log(`newMainUid: ${newMainUid}`)
   remoteUsers[newMainUid].videoTrack.play('full-screen-video')
@@ -291,7 +292,7 @@ const swapMainVideo = async (newMainUid) => {
 
 const getRandomRemoteUserUid = () => {
   const allUids = Object.keys(remoteUsers)
-  if (allUids.length === 0) return undefined   // TODO: handle error-case
+  if (allUids.length === 0) return undefined   // handle error-case
   // return a random uid
   const randomUid = allUids[Math.floor(Math.random() * allUids.length)]
   console.log(`randomUid: ${randomUid}`)
