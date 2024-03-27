@@ -28,6 +28,7 @@ const localTracks = {
     video: null
   },
   screen: {
+    audio: null,
     video: null   
   }
 }
@@ -44,7 +45,7 @@ const localDevives = {
   output: []
 }
 
-let screenshareClient               // Create Screen Share client as needed
+// let screenshareClient               // Create Screen Share client as needed
 let isScreenShareActive = false     // Screen Share flag
 let remoteUsers = {}                // Container for the remote streams
 let mainStreamUid = null            // Reference for video in the full screen view
@@ -215,7 +216,74 @@ const muteTrack = async (track, mute, btn) => {
 }
 
 const handleScreenShare = () => {
+  if (isScreenShareActive) {
+    stopScreenShare()
+  } else {
+    startScreenShare()
+  }
+}
+
+const startScreenShare = async () => {
+  // create the screen video and audio (if available)
+  const screenTrack = await AgoraRTC.createScreenVideoTrack({ encoderConfig: screenShareVideoPreset }, "auto")
+  // check if there's an audio track available or just video
+  if (screenTrack instanceof Array) {
+    localTracks.screen.video = screenTrack[0];
+    localTracks.screen.audio = screenTrack[1];
+  } else {
+    localTracks.screen.video = screenTrack;
+  }
+
+  // move the main user from the full-screen div
+  await createRemoteUserDiv(mainStreamUid)
+  remoteUsers[mainStreamUid].videoTrack.play(`remote-user-${mainStreamUid}-video`)
+
+  // publish the tracks
+  let tracks = [localTracks.screen.video]
+  if (localTracks.screen.audio) {
+    tracks = [localTracks.screen.video, localTracks.screen.audio]
+  }
   
+  // unpublish the camera track and mute it
+  await client.unpublish(localTracks.camera.video)
+  const videoToggleBtn = getById('video-toggle')
+  videoToggleBtn.disabled = true
+  await muteTrack(localTracks.camera.video, true, videoToggleBtn)
+  localTrackState.video = false
+  
+  // publish the new screen tracks
+  await client.publish(tracks);
+  
+  // set screen-share flag and play on full-screen
+  isScreenShareActive = true
+  localTracks.screen.video.play('full-screen-video');
+
+  // Listen for screen share ended event (from browser ui button)
+  localTracks.screen.video.on("track-ended", () => {
+    stopScreenShare()
+  })
+}
+
+const stopScreenShare = async () => {
+  let tracks = [localTracks.screen.video]
+  if (localTracks.screen.audio) {
+    tracks = [localTracks.screen.video, localTracks.screen.audio]
+  }
+  await client.unpublish(tracks)
+  // close the tracks
+  localTracks.screen.video && localTracks.screen.video.close();
+  localTracks.screen.audio && localTracks.screen.audio.close();
+  // publish the local video
+  const videoToggleBtn = getById('video-toggle')
+  await muteTrack(localTracks.camera.video, false, videoToggleBtn)
+  localTrackState.video = true
+  await client.publish(localTracks.camera.video);
+  videoToggleBtn.disabled = false
+  isScreenShareActive = false
+  // localTracks.audioTrack && localTracks.audioTrack.close();
+  // ui clean-up
+  getById('full-screen-video').replaceChildren()    // Remove all children of the main div
+  setNewMainVideo(mainStreamUid)
 }
 
 const handleRttToggle = () => {
@@ -234,8 +302,13 @@ const handleLeaveChannel = async () => {
   }
   await client.leave()                                    // Leave the channel
   console.log("client left channel successfully")  
-  // Reset the UI
   remoteUsers = {}                                        // Reset remote users 
+  // Reset the UI
+  const mediaButtons = [getById('mic-toggle'), getById('video-toggle')]
+  mediaButtons.forEach(btn => {
+    btn.classList.add('media-active')     // Add media-active class
+    btn.classList.remove('muted')         // Remove mute class
+  });
   getById('remote-video-container').replaceChildren()     // Clear the remote user divs
   getById('full-screen-video').replaceChildren()          // Clear the main div
   getById('local-media-controls').style.display = 'none'  // show media controls (mic, video. screen-share, etc)
