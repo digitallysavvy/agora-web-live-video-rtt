@@ -32,6 +32,12 @@ const localTracks = {
   }
 }
 
+const localTrackState = {
+  audio: false,
+  video: false,
+  screen: false
+}
+
 const localDevives = {
   mics: [],
   cameras: [],
@@ -80,6 +86,9 @@ joinform.addEventListener('submit', async function(e){
   const uid = null                                  // Pass null to have Agora set UID dynamically
   await client.join(appid, channelName, token, uid)
   await client.publish([localTracks.camera.audio, localTracks.camera.video])
+  // track audio state locally
+  localTrackState.audio = true
+  localTrackState.video = true
 })
 
 // Add client Event Listeners -- on page load
@@ -116,8 +125,8 @@ const handleRemotUserPublished = async (user, mediaType) => {
     // Check if the full screen view is empty
     if (mainIsEmpty()) {
       mainStreamUid = uid
-      user.videoTrack.play('full-screen-video') // play video on main user div
-      await removeRemoteUserDiv(uid)            // remove the remote div 
+      user.videoTrack.play('full-screen-video')     // play video on main user div
+      await removeRemoteUserDiv(uid)                // remove the remote div 
     } else {
        // play video on remote user div
        user.videoTrack.play(`remote-user-${uid}-video`) 
@@ -144,15 +153,15 @@ const handleRemotUserUnpublished = async (user, mediaType) => {
           }
           await setNewMainVideo(randomUid)
         } else {
-          await setNewMainVideo(remoteUsers[0])   // If only one other person make them the main
+          await setNewMainVideo(remoteUsers[0])           // If only one other person make them the main
         }
       } else{
-        getById('full-screen-video').replaceChildren() // Remove all children of the main div
+        getById('full-screen-video').replaceChildren()    // Remove all children of the main div
       }
     } else {
       const remoteUserPlayer = getById(`remote-user-${uid}-video`)
       if (remoteUserPlayer){
-        remoteUserPlayer.replaceChildren() // Remove all children of the div
+        remoteUserPlayer.replaceChildren()                // Remove all children of the div
       } 
     }
     // TODO: show no video icon
@@ -176,27 +185,29 @@ const addLocalMediaControlListeners = () => {
   leaveChannelBtn.addEventListener('click', handleLeaveChannel)
 }
 
-const handleMicToggle = async () => {
-  const isTrackActive = await AgoraRTC.checkAudioTrackIsActive(localTracks.camera.audio)
-  if (isTrackActive) {
-    muteTrack(localTracks.camera.audio, true)
-  } else {
-    muteTrack(localTracks.camera.audio, false)
-  }
+const handleMicToggle = async (event) => {
+  const isTrackActive = localTrackState.audio                               // Get current audio state
+  await muteTrack(localTracks.camera.audio, isTrackActive, event.target)    // Mute/Unmute
+  localTrackState.audio = !isTrackActive                                    // Invert the audio state
 }
 
-const handleVideoToggle = async () => {
-  const isTrackActive = await AgoraRTC.checkVideoTrackIsActive(localTracks.camera.video)
-  if (isTrackActive) {
-    muteTrack(localTracks.camera.video, true)
-  } else {
-    muteTrack(localTracks.camera.video, false)
-  }
+const handleVideoToggle = async (event) => {
+  const isTrackActive = localTrackState.video                               // Get current video state
+  await muteTrack(localTracks.camera.video, isTrackActive, event.target)    // Mute/Unmute
+  localTrackState.video = !isTrackActive                                    // Invert the video state
 }
 
-const muteTrack = async (track, mute) => {
-  if (!track) return
-  await track.setMuted(mute)
+const muteTrack = async (track, mute, btn) => {
+  if (!track) return                      // Make sure the track exists
+  await track.setMuted(mute)              // Mute the Track (Audio or Video)
+  
+  if (mute){
+    btn.classList.remove('media-active')  // remove the active state
+    btn.classList.add('muted')            // show the button as muted
+  } else {
+    btn.classList.remove('muted')         // remove the muted class
+    btn.classList.add('media-active')     // show the button as active
+  }
 }
 
 const handleScreenShare = () => {
@@ -208,7 +219,7 @@ const handleRttToggle = () => {
 }
 
 const handleLeaveChannel = async () => {
-  // stop the local tracks
+  // loop through and stop the local tracks
   for (let trackName in localTracks.camera) {
     const track = localTracks.camera[trackName]
     if (track) {
@@ -218,7 +229,7 @@ const handleLeaveChannel = async () => {
     }
   }
 
-  // getById('local-media-controls').style.display = 'none' // show media controls (mic, video. screen-share, etc)
+  getById('local-media-controls').style.display = 'none' // show media controls (mic, video. screen-share, etc)
 
   // remove remote users and player views
   remoteUsers = {}
