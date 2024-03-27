@@ -95,6 +95,7 @@ button:focus-visible {
   bottom: 0;
   background: #fff;
   padding: 10px 0;
+  display: none;
 }
 
 #local-media-controls button {

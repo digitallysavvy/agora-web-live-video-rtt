@@ -9,17 +9,10 @@ const audioConfigPreset = 'music_standard'  // 48kHz mono @ 40 Kbps
 const screenShareVideoPreset = '1080_3'     // 1920 x 1080 - 30fps @ 3150 Kps
 
 const joinform = getById('join-channel-form')
-const leaveChannelBtn = getById('leaveBtn')
-const micToggleBtn = getById('mic-toggle')
-const videoToggleBtn = getById('video-toggle')
 
 // helper function to quickly get dom elements
 function getById(divID) {
   return document.getElementById(divID)
-}
-
-function addClick(element, clickEvent) {
-  element.addEventListener('click', clickEvent)
 }
 
 // Create the Agora Client
@@ -47,7 +40,7 @@ const localDevives = {
 
 let screenshareClient               // Create Screen Share client as needed
 let isScreenShareActive = false     // Screen Share flag
-const remoteUsers = { }           // Container for the remote streams
+let remoteUsers = {}           // Container for the remote streams
 let mainStreamUid = null                      // Reference for video in the full screen view
 
 AgoraRTC.enableLogUpload()          // Auto upload logs to Agora
@@ -67,7 +60,29 @@ async function initDevices() {
   localTracks.camera.video.play('local-video')    // Play the local video track in the local-video div
 }
 
-// Add client Event Listeners -- called on page load
+// User Form Submit Event
+joinform.addEventListener('submit', async function(e){
+  e.preventDefault() // stop the page from reloading
+  
+  // Get the channel name from the form input and remove any extra spaces
+  const channelName = getById('form-channel-name').value.trim()
+  // Check if the channel name is empty  
+  if (!channelName || channelName === '') {
+    // TODO: Add error message
+    return
+  }
+  showOverlayForm(false)              // Hide overlay form
+  await initDevices()               // Initialize the devices and create Tracks
+  getById('local-media-controls').style.display = 'block' // show media controls (mic, video. screen-share, etc)
+
+  // Join the channel and publish out streams
+  const token = null                                // Token security is not enabled
+  const uid = null                                  // Pass null to have Agora set UID dynamically
+  await client.join(appid, channelName, token, uid)
+  await client.publish([localTracks.camera.audio, localTracks.camera.video])
+})
+
+// Add client Event Listeners -- on page load
 const addAgoraEventListeners = () => {
   // Add listeners for Agora Client Events
   client.on('user-joined', handleRemotUserJoined)
@@ -75,25 +90,6 @@ const addAgoraEventListeners = () => {
   client.on('user-published', handleRemotUserPublished)
   client.on('user-unpublished', handleRemotUserUnpublished)
 }
-
-// when the user submits the join form
-joinform.addEventListener('submit', async function(e){
-  e.preventDefault()
-  const channelName = getById('form-channel-name').value.trim()
-  if (!channelName || channelName === '') {
-    return
-  }
-
-  showOverlayForm(false)              // Hide overlay form
-  
-  await initDevices()               // Initialize the devices and create Tracks
-
-  // Join the channel and publish out streams
-  const token = null                              // Token security is not enabled
-  const uid = null                                // Pass null to have Agora set UID dynamically
-  await client.join(appid, channelName, token, uid)
-  await client.publish([localTracks.camera.audio, localTracks.camera.video])
-})
 
 // New remote users joins the channel
 const handleRemotUserJoined = async (user) => {
@@ -117,11 +113,11 @@ const handleRemotUserPublished = async (user, mediaType) => {
   await client.subscribe(user, mediaType)
   remoteUsers[uid] = user                             // update remote user reference
   if (mediaType === 'video') { 
-    user.videoTrack.play(`remote-user-${uid}-video`) 
+    // Check if the full screen view is empty
     if (mainIsEmpty()) {
       mainStreamUid = uid
       user.videoTrack.play('full-screen-video') // play video on main user div
-      await removeRemoteUserDiv(uid)
+      await removeRemoteUserDiv(uid)            // remove the remote div 
     } else {
        // play video on remote user div
        user.videoTrack.play(`remote-user-${uid}-video`) 
@@ -139,12 +135,17 @@ const handleRemotUserUnpublished = async (user, mediaType) => {
     // Check if its the full screen user
     if (uid === mainStreamUid) {
       if(Object.keys(remoteUsers).length > 0) {
-        // Find a user and switch them to the full-screen
-        let randomUid = getRandomRemoteUserUid()
-        while (randomUid == mainStreamUid) {
-          randomUid = getRandomRemoteUserUid()
+        // If there is more than one users
+        if(Object.keys(remoteUsers).length > 1) {
+          // Find a user and switch them to the full-screen
+          let randomUid = getRandomRemoteUserUid()
+          while (randomUid == mainStreamUid) {
+            randomUid = getRandomRemoteUserUid()
+          }
+          await setNewMainVideo(randomUid)
+        } else {
+          await setNewMainVideo(remoteUsers[0])   // If only one other person make them the main
         }
-        await setNewMainVideo(randomUid)
       } else{
         getById('full-screen-video').replaceChildren() // Remove all children of the main div
       }
@@ -160,9 +161,79 @@ const handleRemotUserUnpublished = async (user, mediaType) => {
   }
 }
 
+// Add button listeners
+const addLocalMediaControlListeners = () => {
+  const micToggleBtn = getById('mic-toggle')
+  const videoToggleBtn = getById('video-toggle')
+  const screenShareBtn = getById('screen-share')
+  const rttToggleBtn = getById('rtt-toggle')
+  const leaveChannelBtn = getById('leave-channel')
+
+  micToggleBtn.addEventListener('click', handleMicToggle)
+  videoToggleBtn.addEventListener('click', handleVideoToggle)
+  screenShareBtn.addEventListener('click', handleScreenShare)
+  rttToggleBtn.addEventListener('click', handleRttToggle)
+  leaveChannelBtn.addEventListener('click', handleLeaveChannel)
+}
+
+const handleMicToggle = async () => {
+  const isTrackActive = await AgoraRTC.checkAudioTrackIsActive(localTracks.camera.audio)
+  if (isTrackActive) {
+    muteTrack(localTracks.camera.audio, true)
+  } else {
+    muteTrack(localTracks.camera.audio, false)
+  }
+}
+
+const handleVideoToggle = async () => {
+  const isTrackActive = await AgoraRTC.checkVideoTrackIsActive(localTracks.camera.video)
+  if (isTrackActive) {
+    muteTrack(localTracks.camera.video, true)
+  } else {
+    muteTrack(localTracks.camera.video, false)
+  }
+}
+
+const muteTrack = async (track, mute) => {
+  if (!track) return
+  await track.setMuted(mute)
+}
+
+const handleScreenShare = () => {
+  
+}
+
+const handleRttToggle = () => {
+  
+}
+
+const handleLeaveChannel = async () => {
+  // stop the local tracks
+  for (let trackName in localTracks.camera) {
+    const track = localTracks.camera[trackName]
+    if (track) {
+      track.stop()
+      track.close()
+      localTracks.camera[trackName] = undefined
+    }
+  }
+
+  // getById('local-media-controls').style.display = 'none' // show media controls (mic, video. screen-share, etc)
+
+  // remove remote users and player views
+  remoteUsers = {}
+  getById('remote-video-container').replaceChildren()   // Clear the remote user divs
+  getById('full-screen-video').replaceChildren()        // Clear the main div
+  
+  // leave the channel
+  await client.leave()
+  console.log("client left channel successfully")  
+  showOverlayForm(true) 
+}
+
 // create the remote user container and video player div
 const createRemoteUserDiv = async (uid) => {
-  console.log('add remote user div')
+  console.log(`add remote user div for uid: ${uid}`)
   const containerDiv = document.createElement('div')
   containerDiv.id = `remote-user-${uid}-container`
   const remoteUserDiv = document.createElement('div')
@@ -200,7 +271,6 @@ const setNewMainVideo = async (newMainUid) => {
 }
 
 const swapMainVideo = async (newMainUid) => {
-  getById('full-screen-video').replaceChildren()  // clear the main div
   if(remoteUsers[mainStreamUid]) {
     await createRemoteUserDiv(mainStreamUid)
     remoteUsers[mainStreamUid].videoTrack.play(`remote-user-${mainStreamUid}-video`)
@@ -217,6 +287,7 @@ const getRandomRemoteUserUid = () => {
   return randomUid
 }
 
+// Toggle the visibility of the Join channel form
 const showOverlayForm = (show) => {
   console.log('toggle-overlay')
   const modal = getById('overlay')
@@ -234,6 +305,7 @@ const showOverlayForm = (show) => {
 document.addEventListener('DOMContentLoaded', () => {
   console.log('page-loaded')
   showOverlayForm(true)
-  addAgoraEventListeners();
+  addAgoraEventListeners()
+  addLocalMediaControlListeners()
 })
 
